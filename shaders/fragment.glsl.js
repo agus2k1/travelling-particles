@@ -17,7 +17,7 @@ const fragmentShader = /* glsl */ `
 
         color *= vOpacity;
 
-        color.a = min(1., color.a) * 10.; // Change
+        color.a = min(1., color.a) * 10.; // Change last value for brightness
 
         float disc = length(cUV);
 
