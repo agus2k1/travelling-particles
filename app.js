@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import fragment from './shaders/fragment.glsl.js';
 import vertex from './shaders/vertex.glsl.js';
+import map1 from './images/map.jpg';
 
 export default class Sketch {
   constructor() {
@@ -31,7 +32,8 @@ export default class Sketch {
 
     this.getData();
     this.addMesh();
-    this.setupResize();
+    this.update();
+    // this.setupResize();
     // this.resize();
     this.render();
   }
@@ -96,7 +98,13 @@ export default class Sketch {
         // Set points to a position in the path
         let p = path.getPointAtLength(pointAt);
 
-        points.push(new THREE.Vector3(p.x - 1024, p.y - 512, 0)); // Substract half of the width and height to center
+        // Random
+        let randomX = (Math.random() - 0.5) * 5;
+        let randomY = (Math.random() - 0.5) * 5;
+
+        points.push(
+          new THREE.Vector3(p.x - 1024 + randomX, p.y - 512 + randomY, 0)
+        ); // Substract half of the width and height to center
       }
 
       this.lines.push({
@@ -105,6 +113,8 @@ export default class Sketch {
         length,
         number: numberOfPoints,
         points,
+        currentPos: 0,
+        speed: 1,
       });
     });
   }
@@ -122,36 +132,81 @@ export default class Sketch {
       fragmentShader: fragment,
       vertexShader: vertex,
       side: THREE.DoubleSide,
-      // wireframe: true,
+      transparent: true,
+      depthTest: true,
+      depthWrite: true,
+      blending: THREE.AdditiveBlending,
     });
     this.geometry = new THREE.BufferGeometry();
 
-    this.positions = [];
-    this.opacity = [];
+    this.max = this.lines.length * 100;
+    this.positions = new Float32Array(this.max * 3);
+    this.opacity = new Float32Array(this.max);
 
-    this.lines.forEach((line) => {
-      line.points.forEach((point) => {
-        this.positions.push(point.x, point.y, point.z);
-        this.opacity.push(Math.random());
-      });
-    });
+    // this.lines.forEach((line) => {
+    //   line.points.forEach((point) => {
+    //     this.positions.push(point.x, point.y, point.z);
+    //     this.opacity.push(Math.random() / 10);
+    //   });
+    // });
+
+    for (let i = 0; i < this.max; i++) {
+      this.positions.set([Math.random() * 100, Math.random() * 1000, 0], i * 3);
+      this.opacity.set([Math.random() / 10], i);
+    }
 
     // Attributes
     this.geometry.setAttribute(
       'position',
-      new THREE.BufferAttribute(new Float32Array(this.positions), 3)
+      new THREE.BufferAttribute(this.positions, 3)
     );
     this.geometry.setAttribute(
       'opacity',
-      new THREE.BufferAttribute(new Float32Array(this.opacity), 1)
+      new THREE.BufferAttribute(this.opacity, 1)
     );
 
     this.object = new THREE.Points(this.geometry, this.material);
     this.scene.add(this.object);
+
+    let texture = new THREE.TextureLoader().load(map1);
+    texture.flipY = false;
+
+    // Map
+    let map = new THREE.Mesh(
+      new THREE.PlaneGeometry(2048, 1024),
+      new THREE.MeshBasicMaterial({
+        color: 0x000011,
+        map: texture,
+      })
+    );
+
+    this.scene.add(map);
+  }
+
+  update() {
+    let j = 0;
+    this.lines.forEach((line) => {
+      line.currentPos += line.speed;
+
+      line.currentPos = line.currentPos % line.number;
+
+      for (let i = 0; i < 100; i++) {
+        let index = (line.currentPos + i) % line.number;
+        let p = line.points[index]; // vec3
+        this.positions.set([p.x, p.y, p.z], j * 3);
+        this.opacity.set([i / 1000], j);
+        j++;
+      }
+    });
+
+    this.geometry.attributes.position.array = this.positions;
+    this.geometry.attributes.position.needsUpdate = true;
   }
 
   render() {
     this.time += 0.05;
+
+    this.update();
     this.material.uniforms.time.value = this.time;
     this.renderer.render(this.scene, this.camera);
     window.requestAnimationFrame(this.render.bind(this));
